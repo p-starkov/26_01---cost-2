@@ -119,18 +119,22 @@ def register_registration_handlers(dp: Dispatcher, svc: UserGroupsService) -> No
         F.text.in_({CREATE_GROUP_BTN, JOIN_GROUP_BTN}),
     )
     async def process_menu_choice(message: Message, state: FSMContext):
+        # Telegram-идентификатор пользователя
         user_id = str(message.from_user.id)
+        # Имя пользователя для записи в лист users
+        user_name = message.from_user.full_name  # или message.from_user.username
         text = message.text
 
         if text == CREATE_GROUP_BTN:
-            if text == CREATE_GROUP_BTN:
-                # Генерируем, пока не найдём свободный id
-                while True:
-                    group_id = generate_group_id(6)
-                    if not svc.group_repo.exists(group_id):
-                        break
+            # Генерируем случайный ID группы, пока не найдём свободный
+            while True:
+                group_id = generate_group_id(6)
+                if not svc.group_repo.exists(group_id):
+                    break
 
-                group = svc.create_group_and_assign(user_id, group_id)
+            # Создаём группу и привязываем к ней пользователя,
+            # одновременно регистрируя его в листе users (внутри сервиса)
+            group = svc.create_group_and_assign(user_id, group_id, user_name)
 
             await state.clear()
             await message.answer(
@@ -147,6 +151,7 @@ def register_registration_handlers(dp: Dispatcher, svc: UserGroupsService) -> No
                 "Введите ID группы, к которой хотите присоединиться:",
                 reply_markup=ReplyKeyboardRemove(),
             )
+
 
     # Обработка любого другого текста в состоянии MENU_CHOICE
     @dp.message(RegistrationStates.MENU_CHOICE)

@@ -2,7 +2,14 @@
 
 from typing import Protocol, Optional
 from domain.models.groups import Group, UserGroupLink
+from domain.models.users import UserInfo
 
+class IUserRepository(Protocol):
+    def get_by_id(self, user_id: str) -> Optional[UserInfo]:
+        ...
+
+    def create_if_not_exists(self, user_id: str, name: str) -> UserInfo:
+        ...
 
 class IGroupRepository(Protocol):
     """
@@ -76,3 +83,5 @@ class IUserGroupRepository(Protocol):
         если она есть.
         """
         ...
+
+

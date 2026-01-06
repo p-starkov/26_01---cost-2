@@ -4,8 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from domain.models.groups import Group, UserGroupLink
-from domain.repositories import IGroupRepository, IUserGroupRepository
-
+from domain.repositories import IGroupRepository, IUserGroupRepository, IUserRepository
 
 @dataclass
 class UserGroupsService:
@@ -17,6 +16,13 @@ class UserGroupsService:
 
     group_repo: IGroupRepository
     user_group_repo: IUserGroupRepository
+    user_repo: IUserRepository
+
+    def ensure_user_exists(self, user_id: str, name: str) -> None:
+        """
+        Если пользователя ещё нет в листе users, добавить его.
+        """
+        self.user_repo.create_if_not_exists(user_id, name)
 
     def get_current_user_group(self, user_id: str) -> Optional[Group]:
         """
@@ -37,34 +43,82 @@ class UserGroupsService:
 
         return Group(id=link.group_id)
 
-    def create_group_and_assign(self, user_id: str, group_id: str) -> Group:
+    def create_group_and_assign(
+        self,
+        user_id: str,
+        group_id: str,
+        user_name: str,
+    ) -> Group:
         """
         Создать новую группу с заданным идентификатором и
         привязать пользователя к этой группе.
 
-        В проде group_id обычно генерируется автоматически (короткий код).
+        Дополнительно:
+        - если пользователя ещё нет в листе users, добавить его
+        с указанным именем.
         """
-        # Создаём группу в таблице Groups
+
+        # Сначала убедимся, что пользователь есть в листе users.
+        # Если записи нет, репозиторий создаст строку (userId, userName).
+        self.ensure_user_exists(user_id, user_name)
+
+        # Создаём группу в таблице Groups.
+        # Репозиторий добавит новую строку с group_id в лист Groups.
         group = self.group_repo.create(group_id)
 
         # Обновляем или создаём запись userId -> groupId
+        # в таблице userGroups.
+        # Если строка с таким userId уже была, её groupId заменится.
+        # Если не было — добавится новая строка.
         self.user_group_repo.upsert(user_id, group_id)
 
+        # Возвращаем объект Group, чтобы хэндлер мог показать id пользователю.
         return group
 
-    def join_group(self, user_id: str, group_id: str) -> bool:
+
+    def join_group(
+        self,
+        user_id: str,
+        group_id: str,
+        user_name: str,
+    ) -> bool:
         """
         Присоединить пользователя к существующей группе.
 
+        Параметры:
+        - user_id: идентификатор пользователя (telegram user id).
+        - group_id: введённый пользователем идентификатор группы
+        (может быть в любом регистре).
+        - user_name: имя пользователя (для записи в таблицу users,
+        если его там ещё нет).
+
         Возвращает:
-        - True, если группа существует и присоединение выполнено;
-        - False, если группы с таким id нет.
+        - True, если группа существует и привязка создана/обновлена.
+        - False, если группы с таким id не существует.
         """
-        if not self.group_repo.exists(group_id):
+
+        # Убедимся, что пользователь есть в листе users.
+        # Если записи нет, добавим (userId, userName).
+        self.ensure_user_exists(user_id, user_name)
+
+        # Нормализуем идентификатор группы:
+        # - убираем пробелы по краям;
+        # - приводим к верхнему регистру.
+        # Так поиск и хранение group_id становятся регистронезависимыми.
+        group_id_norm = group_id.strip().upper()
+
+        # Проверяем, существует ли такая группа в таблице Groups.
+        # Если нет — нельзя присоединить пользователя, возвращаем False.
+        if not self.group_repo.exists(group_id_norm):
             return False
 
-        self.user_group_repo.upsert(user_id, group_id)
+        # Группа существует — обновляем/создаём связь userId -> groupId
+        # в таблице userGroups.
+        self.user_group_repo.upsert(user_id, group_id_norm)
+
+        # Сообщаем вызывающему коду, что операция прошла успешно.
         return True
+
     
     def leave_group(self, user_id: str) -> bool:
         """

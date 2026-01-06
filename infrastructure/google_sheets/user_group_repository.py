@@ -1,15 +1,18 @@
 # infrastructure/google_sheets/user_group_repository.py
 
 from typing import Optional, List, Tuple
+
 from googleapiclient.discovery import Resource
+
 from domain.models.groups import UserGroupLink
 from domain.repositories import IUserGroupRepository
 from infrastructure.google_sheets.client import get_sheets_service, SPREADSHEET_ID
 from config.settings import SHEET_USER_GROUPS_RANGE, SHEET_ID_USER_GROUPS
 
+
 class UserGroupSheetRepository(IUserGroupRepository):
     """
-    Реализация репозитория связки пользователь -> группа
+    Репозиторий связки пользователь -> группа
     поверх листа userGroups.
 
     Лист userGroups:
@@ -32,9 +35,7 @@ class UserGroupSheetRepository(IUserGroupRepository):
         """
         # Пример: "userGroups!A2:B"
         range_str = SHEET_USER_GROUPS_RANGE
-        # Берём часть после '!' и извлекаем число из A2
         _, cells_part = range_str.split("!")
-        # cells_part, например, "A2:B"
         start_row_str = ""
         for ch in cells_part.split(":")[0]:
             if ch.isdigit():
@@ -78,12 +79,11 @@ class UserGroupSheetRepository(IUserGroupRepository):
         """
         values, start_row_index = self._read_all_rows()
 
-        # Сначала попытаемся найти существующую строку
-        row_index = None  # абсолютный номер строки в листе
-        current_row_offset = 0  # смещение от start_row_index
+        row_index = None
+        current_row_offset = 0
 
         for row in values:
-            current_row_offset += 1  # первая строка из values соответствует start_row_index
+            current_row_offset += 1
             if not row:
                 continue
             row_user_id = row[0].strip()
@@ -96,7 +96,6 @@ class UserGroupSheetRepository(IUserGroupRepository):
         norm_group_id = group_id.strip().upper()
 
         if row_index is None:
-            # Строки нет — добавляем новую (append)
             body = {"values": [[str(user_id), norm_group_id]]}
 
             (
@@ -111,7 +110,6 @@ class UserGroupSheetRepository(IUserGroupRepository):
                 .execute()
             )
         else:
-            # Строка есть — обновляем её
             update_range = f"userGroups!A{row_index}:B{row_index}"
             body = {"values": [[str(user_id), norm_group_id]]}
 
@@ -132,7 +130,7 @@ class UserGroupSheetRepository(IUserGroupRepository):
     def delete_by_user_id(self, user_id: str) -> None:
         """
         Удаляет строку с userId из листа userGroups, если она есть,
-        именно удаляя строку (со сдвигом вверх), а не просто очищая ячейки.
+        удаляя строку со сдвигом вверх.
         """
         values, start_row_index = self._read_all_rows()
 
@@ -151,8 +149,7 @@ class UserGroupSheetRepository(IUserGroupRepository):
                 break
 
         if row_index is None:
-            return  # Нечего удалять
-
+            return
 
         requests = [
             {

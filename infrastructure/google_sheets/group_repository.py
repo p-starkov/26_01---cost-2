@@ -41,9 +41,12 @@ class GroupSheetRepository(IGroupRepository):
     def exists(self, group_id: str) -> bool:
         """
         Проверяет, есть ли в листе Groups строка с таким group_id.
+        Поиск регистронезависимый.
         """
         group_ids = self._read_all_group_ids()
-        return group_id in group_ids
+        target = group_id.strip().upper()
+        group_ids_upper = [g.strip().upper() for g in group_ids]
+        return target in group_ids_upper
 
     def create(self, group_id: str) -> Group:
         """

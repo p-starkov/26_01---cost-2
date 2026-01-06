@@ -94,10 +94,12 @@ class UserGroupSheetRepository(IUserGroupRepository):
             if row_user_id == str(user_id):
                 row_index = start_row_index + current_row_offset - 1
                 break
+        
+        norm_group_id = group_id.strip().upper()
 
         if row_index is None:
             # Строки нет — добавляем новую (append)
-            body = {"values": [[str(user_id), group_id]]}
+            body = {"values": [[str(user_id), norm_group_id]]}
 
             (
                 self.service.spreadsheets()
@@ -113,7 +115,7 @@ class UserGroupSheetRepository(IUserGroupRepository):
         else:
             # Строка есть — обновляем её
             update_range = f"userGroups!A{row_index}:B{row_index}"
-            body = {"values": [[str(user_id), group_id]]}
+            body = {"values": [[str(user_id), norm_group_id]]}
 
             (
                 self.service.spreadsheets()
@@ -127,4 +129,4 @@ class UserGroupSheetRepository(IUserGroupRepository):
                 .execute()
             )
 
-        return UserGroupLink(user_id=str(user_id), group_id=group_id)
+        return UserGroupLink(user_id=str(user_id), group_id=norm_group_id)

@@ -2,7 +2,7 @@
 
 import os
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "ЗАМЕНИ_НА_СВОЙ_ТОКЕН")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8562811620:AAHYNmfY37lrYWchKdUe0gCZvbS9v9tCxzk")
 
 # ID основной Google-таблицы (из URL таблицы)
 GOOGLE_SPREADSHEET_ID = os.getenv(

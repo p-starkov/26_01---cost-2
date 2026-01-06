@@ -55,6 +55,21 @@ def register_registration_handlers(dp: Dispatcher, svc: UserGroupsService) -> No
     - dp: Dispatcher aiogram.
     - svc: сервис работы с группами пользователя.
     """
+    # /help
+    @dp.message(Command("help"))
+    async def cmd_help(message: Message):
+        """
+        Показать список доступных команд.
+        """
+        text = (
+            "<b>Доступные команды:</b>\n"
+            "/start - показать текущую группу или выбрать действие, если группа ещё не выбрана.\n"
+            "/change_group - сменить текущую группу (создать новую или присоединиться к существующей).\n"
+            "/leave_group - выйти из текущей группы.\n"
+            "/help - показать это справочное сообщение.\n"
+        )
+
+        await message.answer(text)
 
     # /start
     @dp.message(CommandStart())
@@ -165,5 +180,32 @@ def register_registration_handlers(dp: Dispatcher, svc: UserGroupsService) -> No
         await state.clear()
         await message.answer(
             f"Вы успешно присоединились к группе <b>{group_id}</b>.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+
+    # /leave_group
+    @dp.message(Command("leave_group"))
+    async def cmd_leave_group(message: Message, state: FSMContext):
+        """
+        Команда выхода из текущей группы.
+        Удаляет привязку userId -> groupId.
+        """
+        user_id = str(message.from_user.id)
+
+        # На всякий случай сбрасываем состояние диалога
+        await state.clear()
+
+        left = svc.leave_group(user_id)
+        if not left:
+            await message.answer(
+                "Вы и так не привязаны ни к одной группе.",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+            return
+
+        await message.answer(
+            "Вы вышли из текущей группы.\n"
+            "При необходимости вы можете снова создать группу или "
+            "присоединиться к существующей через команду /start или /change_group.",
             reply_markup=ReplyKeyboardRemove(),
         )

@@ -65,3 +65,18 @@ class UserGroupsService:
 
         self.user_group_repo.upsert(user_id, group_id)
         return True
+    
+    def leave_group(self, user_id: str) -> bool:
+        """
+        Удалить привязку пользователя к текущей группе.
+
+        Возвращает:
+        - True, если привязка была и мы её удалили;
+        - False, если пользователь и так не был ни к какой группе привязан.
+        """
+        link: Optional[UserGroupLink] = self.user_group_repo.get_by_user_id(user_id)
+        if link is None:
+            return False
+
+        self.user_group_repo.delete_by_user_id(user_id)
+        return True

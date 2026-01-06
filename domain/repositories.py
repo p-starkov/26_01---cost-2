@@ -69,3 +69,10 @@ class IUserGroupRepository(Protocol):
         - актуальный объект UserGroupLink после изменения.
         """
         ...
+
+    def delete_by_user_id(self, user_id: str) -> None:
+        """
+        Удалить строку с указанным user_id из таблицы userGroups,
+        если она есть.
+        """
+        ...

@@ -5,8 +5,7 @@ from googleapiclient.discovery import Resource
 from domain.models.groups import UserGroupLink
 from domain.repositories import IUserGroupRepository
 from infrastructure.google_sheets.client import get_sheets_service, SPREADSHEET_ID
-from config.settings import SHEET_USER_GROUPS_RANGE
-
+from config.settings import SHEET_USER_GROUPS_RANGE, SHEET_ID_USER_GROUPS
 
 class UserGroupSheetRepository(IUserGroupRepository):
     """
@@ -28,16 +27,14 @@ class UserGroupSheetRepository(IUserGroupRepository):
 
         Возвращает:
         - values: список строк (каждая строка — список значений ячеек)
-        - start_row_index: номер первой строки диапазона (например, 2)
-          нужен, чтобы вычислять абсолютный номер строки для обновления.
+        - start_row_index: номер первой строки диапазона (например, 2),
+          нужен, чтобы вычислять абсолютный номер строки для обновления/удаления.
         """
         # Пример: "userGroups!A2:B"
-        # Из этой строки вытащим номер первой строки (2)
         range_str = SHEET_USER_GROUPS_RANGE
         # Берём часть после '!' и извлекаем число из A2
-        sheet_part, cells_part = range_str.split("!")
+        _, cells_part = range_str.split("!")
         # cells_part, например, "A2:B"
-        # берём число из "A2"
         start_row_str = ""
         for ch in cells_part.split(":")[0]:
             if ch.isdigit():
@@ -65,10 +62,11 @@ class UserGroupSheetRepository(IUserGroupRepository):
         for row in values:
             if not row:
                 continue
-            # Ожидаем, что row[0] = userId, row[1] = groupId
-            row_user_id = row[0]
+            row_user_id = row[0].strip()
+            if not row_user_id:
+                continue
             if row_user_id == str(user_id):
-                group_id = row[1] if len(row) > 1 else ""
+                group_id = row[1].strip() if len(row) > 1 else ""
                 return UserGroupLink(user_id=str(user_id), group_id=group_id)
 
         return None
@@ -85,16 +83,16 @@ class UserGroupSheetRepository(IUserGroupRepository):
         current_row_offset = 0  # смещение от start_row_index
 
         for row in values:
-            current_row_offset += (
-                1  # первая строка из values соответствует start_row_index
-            )
+            current_row_offset += 1  # первая строка из values соответствует start_row_index
             if not row:
                 continue
-            row_user_id = row[0]
+            row_user_id = row[0].strip()
+            if not row_user_id:
+                continue
             if row_user_id == str(user_id):
                 row_index = start_row_index + current_row_offset - 1
                 break
-        
+
         norm_group_id = group_id.strip().upper()
 
         if row_index is None:
@@ -130,3 +128,46 @@ class UserGroupSheetRepository(IUserGroupRepository):
             )
 
         return UserGroupLink(user_id=str(user_id), group_id=norm_group_id)
+
+    def delete_by_user_id(self, user_id: str) -> None:
+        """
+        Удаляет строку с userId из листа userGroups, если она есть,
+        именно удаляя строку (со сдвигом вверх), а не просто очищая ячейки.
+        """
+        values, start_row_index = self._read_all_rows()
+
+        row_index = None
+        current_row_offset = 0
+
+        for row in values:
+            current_row_offset += 1
+            if not row:
+                continue
+            row_user_id = row[0].strip()
+            if not row_user_id:
+                continue
+            if row_user_id == str(user_id):
+                row_index = start_row_index + current_row_offset - 1
+                break
+
+        if row_index is None:
+            return  # Нечего удалять
+
+
+        requests = [
+            {
+                "deleteDimension": {
+                    "range": {
+                        "sheetId": SHEET_ID_USER_GROUPS,
+                        "dimension": "ROWS",
+                        "startIndex": row_index - 1,
+                        "endIndex": row_index,
+                    }
+                }
+            }
+        ]
+
+        self.service.spreadsheets().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID,
+            body={"requests": requests},
+        ).execute()

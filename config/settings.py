@@ -12,3 +12,6 @@ GOOGLE_SPREADSHEET_ID = os.getenv(
 # Названия листов и диапазоны
 SHEET_GROUPS_RANGE = "Groups!A2:A"  # колонка id в листе Groups
 SHEET_USER_GROUPS_RANGE = "userGroups!A2:B"  # колонки userId, groupId
+
+# GID листа userGroups (sheetId), для batchUpdate deleteDimension
+SHEET_ID_USER_GROUPS = 1924028603  

@@ -66,6 +66,7 @@ def register_registration_handlers(dp: Dispatcher, svc: UserGroupsService) -> No
             "/start - показать текущую группу или выбрать действие, если группа ещё не выбрана.\n"
             "/change_group - сменить текущую группу (создать новую или присоединиться к существующей).\n"
             "/leave_group - выйти из текущей группы.\n"
+            "/operation - ввод данных о затратах и передачах.\n"
             "/help - показать это справочное сообщение.\n"
         )
 
@@ -87,7 +88,8 @@ def register_registration_handlers(dp: Dispatcher, svc: UserGroupsService) -> No
             await state.clear()
             await message.answer(
                 f"Текущая группа: <b>{current_group.id}</b>\n"
-                "Чтобы сменить группу, используйте команду /change_group.",
+                "Чтобы сменить группу, используйте команду /change_group.\n"
+                "для ввода затрат используйте команду /operation.",
                 reply_markup=ReplyKeyboardRemove(),
             )
             return
@@ -174,7 +176,9 @@ def register_registration_handlers(dp: Dispatcher, svc: UserGroupsService) -> No
             await message.answer("ID группы не может быть пустым. Введите ID ещё раз.")
             return
 
-        joined = svc.join_group(user_id, group_id)
+        user_name = message.from_user.full_name  # или message.from_user.username
+
+        joined = svc.join_group(user_id, group_id, user_name)
         if not joined:
             await message.answer(
                 "Группа с таким ID не найдена. "
@@ -211,6 +215,7 @@ def register_registration_handlers(dp: Dispatcher, svc: UserGroupsService) -> No
         await message.answer(
             "Вы вышли из текущей группы.\n"
             "При необходимости вы можете снова создать группу или "
-            "присоединиться к существующей через команду /start или /change_group.",
+            "присоединиться к существующей через команду /start или /change_group."
+            "для ввода затрат нажмите /operation.",
             reply_markup=ReplyKeyboardRemove(),
         )

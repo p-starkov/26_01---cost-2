@@ -18,3 +18,7 @@ SHEET_USERS_RANGE = "users!A2:B"  # A: userId, B: userName
 
 # GID листа userGroups (sheetId), для batchUpdate deleteDimension
 SHEET_ID_USER_GROUPS = 1924028603  
+
+# Диапазоны для операций
+SHEET_OPERATIONS_RANGE = "operations!A2:H"       # Date, Id, OperationType, Person, Category, Comment, Amount, Active
+SHEET_OPERATION_ROWS_RANGE = "operationsRows!A2:H"  # Date, Operation, Person, IsExpense, Category, Type, Amount, Active

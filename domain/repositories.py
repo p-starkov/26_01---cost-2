@@ -3,6 +3,7 @@
 from typing import Protocol, Optional
 from domain.models.groups import Group, UserGroupLink
 from domain.models.users import UserInfo
+from domain.models.expenses import Operation, OperationRow
 
 class IUserRepository(Protocol):
     def get_by_id(self, user_id: str) -> Optional[UserInfo]:
@@ -66,14 +67,6 @@ class IUserGroupRepository(Protocol):
     def upsert(self, user_id: str, group_id: str) -> UserGroupLink:
         """
         Обновить или создать запись для пользователя.
-
-        Логика:
-        - если в таблице userGroups уже есть строка с этим userId,
-          то заменить в ней groupId на новое значение;
-        - если строки нет, добавить новую (userId, groupId).
-
-        Возвращает:
-        - актуальный объект UserGroupLink после изменения.
         """
         ...
 
@@ -85,3 +78,32 @@ class IUserGroupRepository(Protocol):
         ...
 
 
+class IOperationRepository(Protocol):
+    """
+    Контракт для работы с листом operations (таблица Operations).
+    Сейчас нужен только метод create (добавить одну операцию).
+    """
+
+    def create(self, op: Operation) -> None:
+        """
+        Сохранить операцию в хранилище.
+
+        Параметры:
+        - op: объект Operation с заполненными полями.
+        """
+        ...
+
+
+class IOperationRowRepository(Protocol):
+    """
+    Контракт для работы с листом operationsRows (таблица OperationRows).
+    """
+
+    def create_many(self, rows: list[OperationRow]) -> None:
+        """
+        Сохранить сразу несколько строк операций.
+
+        Параметры:
+        - rows: список объектов OperationRow.
+        """
+        ...

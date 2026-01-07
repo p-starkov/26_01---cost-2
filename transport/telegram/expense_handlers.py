@@ -17,7 +17,9 @@ from aiogram.types import (
 
 from application.usecases.expenses import ExpenseService
 from application.usecases.user_groups import UserGroupsService
+from application.usecases.reports import ReportService
 from common.id_generator import generate_group_id  # если потребуется
+
 
 LOG_CHANNEL_ID = -1002907150912
 
@@ -31,6 +33,9 @@ TRANSFER_BTN = "Передача"  # пока только заглушка
 # Кнопки выбора режима учета затраты
 EXPENSE_FOR_ALL_BTN = "За всех в группе"
 EXPENSE_SELECTIVE_BTN = "Выборочно"  # пока не реализуем
+
+# Кнопки выбора отчета
+REPORT_BALANCE_BTN = "Баланс"
 
 # Список категорий затрат
 CATEGORIES = ["Реклама", "Релизы", "Контент", "Концерты", "Прочее"]
@@ -120,6 +125,22 @@ def _expense_mode_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def _report_menu_keyboard() -> InlineKeyboardMarkup:
+    """
+    Клавиатура с перечнем доступных отчётов.
+    Пока доступен один отчёт — 'Баланс'.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=REPORT_BALANCE_BTN,
+                    callback_data="report:balance",
+                )
+            ],
+        ]
+    )
+
 # >>> ИЗМЕНЕНО: категории тоже как inline-кнопки.
 def _category_keyboard() -> InlineKeyboardMarkup:
     """
@@ -194,6 +215,7 @@ def register_expense_handlers(
     dp: Dispatcher,
     user_groups_svc: UserGroupsService,
     expense_svc: ExpenseService,
+    report_svc: ReportService,
 ) -> None:
     """
     Функция, которую вызываем из main.py,
@@ -516,6 +538,7 @@ def register_expense_handlers(
                 return
 
             op_id = expense_svc.create_transfer(
+                group_id=group_id, 
                 from_user_id=user_id,
                 to_user_id=transfer_target_id,
                 comment=comment,
@@ -577,3 +600,41 @@ def register_expense_handlers(
             result_text + f"ID операции: <code>{op_id}</code>",
             reply_markup=ReplyKeyboardRemove(),
         )
+    
+    @dp.message(Command("report"))
+    async def cmd_report(message: Message, state: FSMContext):
+            await state.clear()
+            await message.answer(
+                "Выберите отчёт:",
+                reply_markup=_report_menu_keyboard(),
+            )
+
+    @dp.callback_query(F.data == "report:balance")
+    async def process_report_balance(callback: CallbackQuery, state: FSMContext):
+        """
+        Обработчик выбора отчёта 'Баланс'.
+
+        1. Определяем текущую группу пользователя.
+        2. Запрашиваем отчёт у ReportService.
+        3. Отправляем текст пользователю.
+        """
+        user_id = str(callback.from_user.id)
+
+        # Текущая группа по userGroups
+        link = user_groups_svc.user_group_repo.get_by_user_id(user_id)
+        if link is None:
+            await state.clear()
+            await callback.message.answer(
+                "Вы ещё не выбрали группу.\n"
+                "Сначала используйте команду /start и выберите или создайте группу.",
+            )
+            await callback.answer()
+            return
+
+        group_id = link.group_id
+
+        # Получаем уже отформатированный текст отчёта
+        report_text = report_svc.format_balance_report(group_id)
+
+        await callback.message.answer(report_text)
+        await callback.answer()

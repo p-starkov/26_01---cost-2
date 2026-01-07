@@ -2,12 +2,11 @@
 
 import os
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8562811620:AAHYNmfY37lrYWchKdUe0gCZvbS9v9tCxzk")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # ID основной Google-таблицы (из URL таблицы)
 GOOGLE_SPREADSHEET_ID = os.getenv(
-    "GOOGLE_SPREADSHEET_ID", "18ZpfUkMo_3I303LOfLT1_kyuCug6FE5uSCBZa93SFDk"
-)
+    "GOOGLE_SPREADSHEET_ID")
 
 # Названия листов и диапазоны
 SHEET_GROUPS_RANGE = "Groups!A2:A"  # колонка id в листе Groups

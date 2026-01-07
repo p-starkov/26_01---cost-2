@@ -14,14 +14,15 @@ class OperationSheetRepository(IOperationRepository):
     def create(self, op: Operation) -> None:
         body = {
             "values": [[
-                op.date.isoformat(),   # Date
-                op.id,                 # Id
-                op.operation_type,     # OperationType
-                op.person_id,          # Person
+                op.group_id,            # Group
+                op.date.isoformat(),    # Date
+                op.id,                  # Id
+                op.operation_type,      # OperationType
+                op.person_id,           # Person
                 "TRUE" if op.is_expense else "FALSE",    # IsExpense
-                op.category,           # Category
-                op.comment,            # Comment
-                op.amount,             # Amount
+                op.category,            # Category
+                op.comment,             # Comment
+                op.amount,              # Amount
                 "TRUE" if op.active else "FALSE",  # Active
             ]]
         }

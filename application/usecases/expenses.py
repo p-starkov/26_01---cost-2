@@ -50,6 +50,7 @@ class ExpenseService:
 
         # 1. Основная операция
         op = Operation(
+            group_id=group_id,
             date=now,
             id=op_id,
             operation_type="expense",
@@ -88,6 +89,7 @@ class ExpenseService:
         # 2.1 debit строка для потратившего
         rows.append(
             OperationRow(
+                group_id=group_id, 
                 date=now,
                 operation_id=op_id,
                 person_id=user_id,
@@ -102,6 +104,7 @@ class ExpenseService:
         for pid in member_ids:
             rows.append(
                 OperationRow(
+                    group_id=group_id, 
                     date=now,
                     operation_id=op_id,
                     person_id=pid,
@@ -119,6 +122,7 @@ class ExpenseService:
 
     def create_transfer(
         self,
+        group_id: str,
         from_user_id: str,
         to_user_id: str,
         comment: str,
@@ -148,6 +152,7 @@ class ExpenseService:
         # 1. Основная операция в листе operations
         #    Тип — 'transfer', категория — 'transfer', активна по умолчанию.
         op = Operation(
+            group_id=group_id,
             date=now,
             id=op_id,
             operation_type="transfer",  # <== тип операции
@@ -166,6 +171,7 @@ class ExpenseService:
         # 2.1 Строка отправителя: debit
         rows.append(
             OperationRow(
+                group_id=group_id, 
                 date=now,
                 operation_id=op_id,
                 person_id=from_user_id,
@@ -179,6 +185,7 @@ class ExpenseService:
         # 2.2 Строка получателя: credit
         rows.append(
             OperationRow(
+                group_id=group_id, 
                 date=now,
                 operation_id=op_id,
                 person_id=to_user_id,

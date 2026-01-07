@@ -17,6 +17,7 @@ class OperationRowSheetRepository(IOperationRowRepository):
         values = []
         for r in rows:
             values.append([
+                r.group_id,                        # Group 
                 r.date.isoformat(),                 # Date
                 r.operation_id,                     # Operation
                 r.person_id,                        # Person

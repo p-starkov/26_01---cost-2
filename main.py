@@ -10,6 +10,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from config.settings import TELEGRAM_BOT_TOKEN
+from application.usecases.reports import ReportService
 from infrastructure.google_sheets.group_repository import GroupSheetRepository
 from infrastructure.google_sheets.user_group_repository import UserGroupSheetRepository
 from infrastructure.google_sheets.user_repository import UserSheetRepository
@@ -22,6 +23,8 @@ from infrastructure.google_sheets.operation_row_repository import OperationRowSh
 from transport.telegram.expense_handlers import register_expense_handlers
 from application.usecases.expenses import ExpenseService
 
+
+
 async def main():
     # 1. Создаём Bot и Dispatcher
     bot = Bot(
@@ -33,6 +36,7 @@ async def main():
         commands=[
             BotCommand(command="start", description="Начать работу / выбрать группу"),
             BotCommand(command="operation", description="Учесть затрату или передачу"),
+            BotCommand(command="report", description="Показать отчёты"),
             # можно добавить и другие команды
         ]
     )
@@ -58,9 +62,15 @@ async def main():
         user_group_repo=user_group_repo,
     )
 
+    report_service = ReportService(
+        user_groups_svc=user_groups_service,
+        user_repo=user_repo,
+        group_repo=group_repo,
+    )
+
     # 3. Регистрируем хэндлеры, передавая внутрь сервис
     register_registration_handlers(dp, user_groups_service)
-    register_expense_handlers(dp, user_groups_service, expense_service)
+    register_expense_handlers(dp, user_groups_service, expense_service, report_service)
 
     # 4. Запускаем бота в режиме long polling
     print("Bot started")

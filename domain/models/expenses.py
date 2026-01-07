@@ -9,6 +9,7 @@ RowType = Literal["debit", "credit"]
 
 @dataclass
 class Operation:
+    group_id: str
     date: datetime
     id: str                # UUID
     operation_type: OperationType
@@ -22,6 +23,7 @@ class Operation:
 
 @dataclass
 class OperationRow:
+    group_id: str
     date: datetime
     operation_id: str      # UUID родительской операции
     person_id: str

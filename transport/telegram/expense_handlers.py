@@ -62,6 +62,9 @@ class ExpenseStates(StatesGroup):
     # Пользователь вводит сумму
     EXPENSE_AMOUNT = State()
 
+     # пользователь выбирает получателя для передачи
+    TRANSFER_TARGET = State()
+
 
 # ----- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ КЛАВИАТУР -----
 
@@ -136,6 +139,55 @@ def _category_keyboard() -> InlineKeyboardMarkup:
         keyboard_rows.append([button])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+
+def _transfer_target_keyboard(
+    group_member_ids: list[str],
+    current_user_id: str,
+    user_groups_svc: UserGroupsService,
+) -> InlineKeyboardMarkup:
+    """
+    Строит inline-клавиатуру для выбора получателя передачи.
+
+    В подписи кнопки используем имя пользователя из листа users,
+    если оно есть, иначе показываем его id.
+    """
+    buttons: list[list[InlineKeyboardButton]] = []
+
+    for uid in group_member_ids:
+        if uid == current_user_id:
+            # Себя не показываем как возможного получателя
+            continue
+
+        # Пытаемся получить информацию о пользователе из репозитория users
+        # user_repo реализует интерфейс IUserRepository
+        user_info = user_groups_svc.user_repo.get_by_id(uid)
+        if user_info is not None and getattr(user_info, "name", None):
+            display_name = user_info.name
+        else:
+            # Fallback: если имени нет, показываем id
+            display_name = f"Пользователь {uid}"
+
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=display_name,
+                    callback_data=f"trg:{uid}",
+                )
+            ]
+        )
+
+    # На случай, если в группе один человек (нет других получателей)
+    if not buttons:
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text="В группе нет других участников",
+                    callback_data="trg:none",
+                )
+            ]
+        )
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def register_expense_handlers(
@@ -221,12 +273,40 @@ def register_expense_handlers(
             return
 
         if data == "op_transfer":
-            # Логику передач пока не реализуем,
-            # поэтому просто сообщаем об этом.
+            # Помечаем в FSM, что сейчас сценарий передачи
+            await state.update_data(mode="transfer")
+
+            # Достаём group_id и список участников группы
+            data_state = await state.get_data()
+            group_id = data_state.get("group_id")
+            current_user_id = str(callback.from_user.id)
+
+            # Используем тот же способ, что и в ExpenseService.create_expense_for_all:
+            # читаем все строки userGroups и фильтруем по group_id.
+            links, _ = user_groups_svc.user_group_repo._read_all_rows()  # временное решение
+            member_ids: list[str] = []
+            if links:
+                for row in links:
+                    if not row:
+                        continue
+                    row_user_id = row[0].strip()
+                    row_group_id = row[1].strip().upper() if len(row) > 1 else ""
+                    if row_group_id == str(group_id).strip().upper():
+                        member_ids.append(row_user_id)
+
+            # Переводим FSM в состояние выбора получателя
+            await state.set_state(ExpenseStates.TRANSFER_TARGET)
+
+            # Показываем inline-клавиатуру со списком участников
             await callback.message.answer(
-                "Учёт передачи денег пока не реализован.",
+                "Выберите, кому передаёте деньги:",
+                reply_markup=_transfer_target_keyboard(
+                    group_member_ids=member_ids,
+                    current_user_id=current_user_id,
+                    user_groups_svc=user_groups_svc,
+                ),
             )
-            await state.clear()
+
             await callback.answer()
             return
 
@@ -289,6 +369,44 @@ def register_expense_handlers(
             "Пожалуйста, выберите один из вариантов на кнопках под сообщением.",
             reply_markup=_expense_mode_keyboard(),
         )
+
+    # ---------- ШАГ 3a. Выбор получателя для передачи ----------
+
+    @dp.callback_query(
+        ExpenseStates.TRANSFER_TARGET,
+        F.data.startswith("trg:"),
+    )
+    async def process_transfer_target_callback(
+        callback: CallbackQuery,
+        state: FSMContext,
+    ):
+        """
+        Обработка выбора получателя передачи.
+
+        callback_data имеет вид 'trg:<user_id>'.
+        """
+        raw = callback.data  # например 'trg:123456'
+        _, target_user_id = raw.split(":", 1)
+
+        if target_user_id == "none":
+            # Нет других участников — прерываем сценарий
+            await state.clear()
+            await callback.message.answer(
+                "В группе нет других участников, передача невозможна.",
+            )
+            await callback.answer()
+            return
+
+        # Сохраняем id получателя в FSM
+        await state.update_data(transfer_target_id=target_user_id)
+
+        # Переходим к вводу описания
+        await state.set_state(ExpenseStates.EXPENSE_COMMENT)
+        await callback.message.answer(
+            "Введите описание передачи (комментарий):",
+        )
+        await callback.answer()
+
 
     # ---------- ШАГ 4. Выбор категории ----------
 
@@ -379,38 +497,61 @@ def register_expense_handlers(
         group_id = data.get("group_id")
         category = data.get("category")
         comment = data.get("comment", "")
+        mode = data.get("mode", "expense")
+        transfer_target_id = data.get("transfer_target_id")
 
         user_id = str(message.from_user.id)
         user_name = message.from_user.full_name  # пригодится, если будем записывать в users
 
-        if not group_id or not category:
-            # Если чего-то важного не хватает — сбрасываем диалог
-            await state.clear()
-            await message.answer(
-                "Что-то пошло не так с данными операции. "
-                "Попробуйте начать заново командой /operation.",
-            )
-            return
-
         # Вызываем бизнес-логику:
-        # создаём затрату типа 'expense' для всех участников группы.
-        op_id = expense_svc.create_expense_for_all(
-            user_id=user_id,
-            group_id=group_id,
-            category=category,
-            comment=comment,
-            amount=amount,
-        )
+        # создаём операцию типа 'expense' или 'transfer' в зависимости от mode.
+
+        if mode == "transfer":
+            if not group_id or not transfer_target_id:
+                await state.clear()
+                await message.answer(
+                    "Не удалось определить данные передачи. Не указана группа пользователя или получатель."
+                    "Попробуйте начать заново командой /operation.",
+                )
+                return
+
+            op_id = expense_svc.create_transfer(
+                from_user_id=user_id,
+                to_user_id=transfer_target_id,
+                comment=comment,
+                amount=amount,
+            )
+        else:
+            if not group_id or not category:
+                await state.clear()
+                await message.answer(
+                    "Что-то пошло не так с данными операции. Не указана группа пользователя или категория."
+                    "Попробуйте начать заново командой /operation.",
+                )
+                return
+
+            op_id = expense_svc.create_expense_for_all(
+                user_id=user_id,
+                group_id=group_id,
+                category=category,
+                comment=comment,
+                amount=amount,
+            )
+
+
 
         # ---------- ЛОГИРОВАНИЕ В КАНАЛ ----------  #
         # Формируем человекочитаемый текст операции со всеми атрибутами.
+        operation_type = "transfer" if mode == "transfer" else "expense"
+
+        log_category = category if mode != "transfer" else "transfer"
         log_text = (
             "Новая операция зарегистрирована:\n"
+            f"Тип: {operation_type}\n"
             f"ID операции: {op_id}\n"
             f"Пользователь: {user_name} (id={user_id})\n"
             f"Группа: {group_id}\n"
-            f"Тип: Затрата за всех в группе\n"
-            f"Категория: {category}\n"
+            f"Категория: {log_category}\n"
             f"Комментарий: {comment or '—'}\n"
             f"Сумма: {amount}\n"
         )
@@ -425,8 +566,14 @@ def register_expense_handlers(
 
         # Очищаем состояние FSM и сообщаем пользователю результат
         await state.clear()
+
+        result_text = (
+            "Передача успешно зарегистрирована.\n"
+            if mode == "transfer"
+            else "Затрата успешно зарегистрирована.\n"
+        )
+
         await message.answer(
-            f"Затрата успешно зарегистрирована.\n"
-            f"ID операции: <code>{op_id}</code>",
+            result_text + f"ID операции: <code>{op_id}</code>",
             reply_markup=ReplyKeyboardRemove(),
         )

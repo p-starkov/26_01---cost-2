@@ -18,6 +18,7 @@ class OperationSheetRepository(IOperationRepository):
                 op.id,                 # Id
                 op.operation_type,     # OperationType
                 op.person_id,          # Person
+                "TRUE" if op.is_expense else "FALSE",    # IsExpense
                 op.category,           # Category
                 op.comment,            # Comment
                 op.amount,             # Amount

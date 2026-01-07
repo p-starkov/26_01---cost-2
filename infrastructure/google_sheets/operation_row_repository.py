@@ -20,7 +20,6 @@ class OperationRowSheetRepository(IOperationRowRepository):
                 r.date.isoformat(),                 # Date
                 r.operation_id,                     # Operation
                 r.person_id,                        # Person
-                "TRUE" if r.is_expense else "FALSE",  # IsExpense
                 r.category,                         # Category
                 r.row_type,                         # type: debit/credit
                 r.amount,                           # Amount

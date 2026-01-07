@@ -1,0 +1,91 @@
+[Unit]
+Description=Telegram bot (aiogram)
+After=network.target
+
+[Service]
+User=botuser
+WorkingDirectory=/home/botuser/cost2
+Environment="TELEGRAM_BOT_TOKEN=8562811620:AAHYNmfY37lrYWchKdUe0gCZvbS9v9tCxzk"
+Environment="GOOGLE_SPREADSHEET_ID=18ZpfUkMo_3I303LOfLT1_kyuCug6FE5uSCBZa93SFDk"
+ExecStart=/home/botuser/cost2/venv/bin/python /home/botuser/cost2/main.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+
+--------------------------
+Ниже — минимальный «шпаргалка» по управлению ботом на сервере через консоль.
+
+## Основные команды службы бота
+
+Предполагаем, что unit называется `telegram-bot.service`.
+
+- Посмотреть статус бота:  
+  ```bash
+  sudo systemctl status telegram-bot
+  ```  
+  Чтобы выйти из просмотра статуса, нажми клавишу **q**.
+
+- Запустить бота (если остановлен):  
+  ```bash
+  sudo systemctl start telegram-bot
+  ```
+
+- Остановить бота:  
+  ```bash
+  sudo systemctl stop telegram-bot
+  ```
+
+- Перезапустить бота после изменений в коде:  
+  ```bash
+  sudo systemctl restart telegram-bot
+  ```
+
+- Включить автозапуск при перезагрузке сервера (делается один раз):  
+  ```bash
+  sudo systemctl enable telegram-bot
+  ```
+
+## Логи бота
+
+- Смотреть логи бота «вживую»:  
+  ```bash
+  sudo journalctl -u telegram-bot -f
+  ```  
+  Здесь `-f` — «следить за новыми строками». Выйти — клавишей **Ctrl+C**.
+
+- Посмотреть последние, например, 100 строк логов:  
+  ```bash
+  sudo journalctl -u telegram-bot -n 100
+  ```
+
+## Полезные мелочи
+
+- Узнать, кто сейчас в консоли: приглашение вида  
+  - `root@...:~#` — ты под root;  
+  - `botuser@...:~$` — под пользователем `botuser`.  
+
+- Переключиться с обычного пользователя на root (попросит root‑пароль):  
+  ```bash
+  su -
+  ```
+
+Этого набора команд достаточно, чтобы:  
+- понять, работает ли бот;  
+- увидеть ошибки в логах;  
+- перезапустить бота после изменения кода или настроек.
+
+[1](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/84341809/ac9d22cb-389b-4340-bf11-4026a6ec5dc8/paste.txt)
+[2](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/84341809/9c00d427-e0f0-4b63-8029-8982a7150e31/settings.py)
+[3](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/84341809/1e851ac1-e2d8-4e28-bca8-52868fb88d76/expense_handlers.py)
+[4](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/84341809/51c82889-9347-4d73-bd24-7812072bab6e/registration_handlers.py)
+[5](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/84341809/1cf96db7-f15c-4b05-8703-ee8d0ac73da6/reports.py)
+[6](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/84341809/810cbb5d-d3cb-41c9-b231-77e9bd546703/expense_handlers.py)
+[7](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/84341809/9eb3423d-35a5-46bb-aeea-837a8e7ca5cc/main.py)
+[8](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/84341809/5560cbf9-c7ad-4e7d-a0f0-55b1ec9c0c21/image.jpg)
+[9](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/84341809/a604d8fc-b117-4162-95a5-ca1e2031a77e/requirements.txt)
+[10](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/84341809/a06f5809-6541-41e4-be2e-6fcf333c4922/image.jpg)
+[11](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/84341809/373109ad-bfff-4228-9bef-1d589bce1559/image.jpg)
+

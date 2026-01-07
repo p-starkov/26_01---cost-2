@@ -9,4 +9,3 @@ httplib2~=0.22.0
 
 # Утилиты
 python-dotenv~=1.0.1
-pydantic~=2.9.0

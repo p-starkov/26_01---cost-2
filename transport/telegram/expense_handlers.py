@@ -2,6 +2,7 @@
 
 from enum import IntEnum  # (в этом примере IntEnum не обязателен, но можно использовать)
 from aiogram import Dispatcher, F
+from enum import StrEnum
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -43,7 +44,6 @@ CATEGORIES = ["Реклама", "Релизы", "Контент", "Концер�
 
 # ----- СОСТОЯНИЯ FSM (диалога) -----
 
-
 class ExpenseStates(StatesGroup):
     """
     Набор шагов (состояний) диалога учета операций.
@@ -70,6 +70,13 @@ class ExpenseStates(StatesGroup):
      # пользователь выбирает получателя для передачи
     TRANSFER_TARGET = State()
 
+class PeriodChoice(StrEnum):
+    CURRENT_MONTH = "period:current_month"
+    PREV_MONTH = "period:prev_month"
+    CURRENT_QUARTER = "period:current_quarter"
+    PREV_QUARTER = "period:prev_quarter"
+    CURRENT_YEAR = "period:current_year"
+    PREV_YEAR = "period:prev_year"
 
 # ----- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ КЛАВИАТУР -----
 
@@ -124,19 +131,68 @@ def _expense_mode_keyboard() -> InlineKeyboardMarkup:
         ]
     )
 
-
-def _report_menu_keyboard() -> InlineKeyboardMarkup:
+def _period_menu_keyboard() -> InlineKeyboardMarkup:
     """
-    Клавиатура с перечнем доступных отчётов.
-    Пока доступен один отчёт — 'Баланс'.
+    Клавиатура с выбором периода для отчёта по категориям.
     """
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=REPORT_BALANCE_BTN,
+                    text="Текущий месяц",
+                    callback_data=PeriodChoice.CURRENT_MONTH,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Прошлый месяц",
+                    callback_data=PeriodChoice.PREV_MONTH,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Текущий квартал",
+                    callback_data=PeriodChoice.CURRENT_QUARTER,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Прошлый квартал",
+                    callback_data=PeriodChoice.PREV_QUARTER,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Текущий год",
+                    callback_data=PeriodChoice.CURRENT_YEAR,
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Прошлый год",
+                    callback_data=PeriodChoice.PREV_YEAR,
+                ),
+            ],
+        ]
+    )
+
+def _report_menu_keyboard() -> InlineKeyboardMarkup:
+    """
+    Клавиатура для выбора типа отчёта.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Баланс",
                     callback_data="report:balance",
-                )
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Затраты по категориям",
+                    callback_data="report:by_category",
+                ),
             ],
         ]
     )
@@ -635,6 +691,49 @@ def register_expense_handlers(
 
         # Получаем уже отформатированный текст отчёта
         report_text = report_svc.format_balance_report(group_id)
+
+        await callback.message.answer(report_text)
+        await callback.answer()
+
+    @dp.callback_query(F.data == "report:by_category")
+    async def process_report_by_category_menu(callback: CallbackQuery, state: FSMContext):
+        """
+        Пользователь выбрал отчёт "Затраты по категориям".
+        Показываем меню с выбором периода.
+        """
+        await state.clear()
+        await callback.message.answer(
+            "Выберите период для отчёта по категориям:",
+            reply_markup=_period_menu_keyboard(),
+        )
+        await callback.answer()
+
+    @dp.callback_query(F.data.in_({value for value in PeriodChoice}))
+    async def process_report_by_category(callback: CallbackQuery, state: FSMContext):
+        """
+        Обрабатывает выбор периода и вызывает сервис отчётов.
+        """
+        user_id = str(callback.from_user.id)
+
+        # Определяем текущую группу пользователя
+        link = user_groups_svc.user_group_repo.get_by_user_id(user_id)
+        if link is None:
+            await state.clear()
+            await callback.message.answer(
+                "Вы ещё не выбрали группу.\n"
+                "Сначала используйте команду /start и выберите или создайте группу.",
+            )
+            await callback.answer()
+            return
+
+        group_id = link.group_id
+
+        period_code = callback.data  # одно из значений PeriodChoice
+        # Просим сервис отчётов сформировать текст
+        report_text = report_svc.format_category_expense_report(
+            group_id=group_id,
+            period_code=period_code,
+        )
 
         await callback.message.answer(report_text)
         await callback.answer()

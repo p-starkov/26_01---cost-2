@@ -66,6 +66,7 @@ async def main():
         user_groups_svc=user_groups_service,
         user_repo=user_repo,
         group_repo=group_repo,
+        operations_repo=operation_repo,
     )
 
     # 3. Регистрируем хэндлеры, передавая внутрь сервис

@@ -4,6 +4,8 @@ from typing import Protocol, Optional
 from domain.models.groups import Group, UserGroupLink
 from domain.models.users import UserInfo
 from domain.models.expenses import Operation, OperationRow
+from decimal import Decimal, ROUND_HALF_UP
+from datetime import date
 
 class IUserRepository(Protocol):
     def get_by_id(self, user_id: str) -> Optional[UserInfo]:
@@ -90,6 +92,25 @@ class IOperationRepository(Protocol):
 
         Параметры:
         - op: объект Operation с заполненными полями.
+        """
+        ...
+
+    def get_operations_for_group(
+        self,
+        group_id: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> list[Operation]:
+        """
+        Получить список операций группы за указанный период.
+        
+        Параметры:
+        - group_id: идентификатор группы
+        - start_date: начало периода (включительно), опционально
+        - end_date: конец периода (включительно), опционально
+        
+        Возвращает:
+        - список объектов Operation
         """
         ...
 

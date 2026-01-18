@@ -191,6 +191,10 @@ class ReportService:
             op for op in operations
             if op.is_expense
         ]
+        
+        # ОТЛАДКА: вывести количество расходов
+        print(f"Expense operations: {len(expense_ops)}")
+        print("===============================")
 
         if not expense_ops:
             return "За выбранный период не найдено расходов."

@@ -51,6 +51,8 @@ class ExpenseStates(StatesGroup):
     FSM — конечный автомат: бот всегда находится в каком-то одном
     состоянии и реагирует на сообщения по-разному в зависимости от него.
     """
+    # Выбор пользователя, за которого регистрируем операцию (только для /operation_for)
+    SELECT_PERSON = State()
 
     # Пользователь выбирает: что он хочет сделать — затрата или передача
     MAIN_MENU = State()
@@ -130,6 +132,46 @@ def _expense_mode_keyboard() -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+def _person_selection_keyboard(
+    group_member_ids: list[str],
+    user_groups_svc: UserGroupsService,
+) -> InlineKeyboardMarkup:
+    """
+    Строит inline-клавиатуру для выбора пользователя, за которого регистрируем операцию.
+    
+    Параметры:
+    - group_member_ids: список ID всех участников группы
+    - user_groups_svc: сервис для получения информации о пользователях
+    
+    Возвращает:
+    - InlineKeyboardMarkup с кнопками для каждого участника группы
+    """
+    buttons: list[list[InlineKeyboardButton]] = []
+    
+    for uid in group_member_ids:
+        # Пытаемся получить информацию о пользователе из репозитория users
+        user_info = user_groups_svc.user_repo.get_by_id(uid)
+        
+        if user_info is not None and getattr(user_info, "name", None):
+            # Если имя есть — используем его
+            display_name = user_info.name
+        else:
+            # Если имени нет — показываем ID
+            display_name = f"Пользователь {uid}"
+        
+        # Каждая кнопка — отдельная строка
+        # callback_data имеет вид "person:user_id"
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=display_name,
+                    callback_data=f"person:{uid}",
+                )
+            ]
+        )
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def _period_menu_keyboard() -> InlineKeyboardMarkup:
     """
@@ -321,6 +363,95 @@ def register_expense_handlers(
             reply_markup=_main_operation_keyboard(),
         )
 
+    @dp.message(Command("operation_for"))
+    async def cmd_operation_for(message: Message, state: FSMContext):
+        """
+        Команда для учета операции за другого пользователя.
+        
+        Шаги:
+        1. Проверяем, что пользователь привязан к группе
+        2. Получаем список участников группы
+        3. Показываем клавиатуру для выбора пользователя
+        """
+        user_id = str(message.from_user.id)
+        
+        # Проверяем текущую группу пользователя
+        group = user_groups_svc.get_current_user_group(user_id)
+        if group is None:
+            # Группы нет — просим сначала пройти /start
+            await state.clear()
+            await message.answer(
+                "Вы ещё не выбрали группу.\n"
+                "Сначала используйте команду /start и выберите или создайте группу.",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+            return
+        
+        # Сохраняем group_id в FSM
+        await state.update_data(group_id=group.id)
+        
+        # Получаем список участников группы
+        # Используем тот же способ, что и для выбора получателя передачи
+        links, _ = user_groups_svc.user_group_repo._read_all_rows()
+        member_ids: list[str] = []
+        
+        if links:
+            for row in links:
+                if not row:
+                    continue
+                row_user_id = row[0].strip()
+                row_group_id = row[1].strip().upper() if len(row) > 1 else ""
+                if row_group_id == str(group.id).strip().upper():
+                    member_ids.append(row_user_id)
+        
+        # Проверяем, что в группе есть участники
+        if not member_ids:
+            await state.clear()
+            await message.answer(
+                "В группе нет участников. Пригласите пользователей командой /start.",
+            )
+            return
+        
+        # Переводим FSM в состояние выбора пользователя
+        await state.set_state(ExpenseStates.SELECT_PERSON)
+        
+        # Показываем клавиатуру со списком участников
+        await message.answer(
+            "Выберите пользователя, за которого регистрируете операцию:",
+            reply_markup=_person_selection_keyboard(member_ids, user_groups_svc),
+        )
+
+    # ---------- ОБРАБОТКА ВЫБОРА ПОЛЬЗОВАТЕЛЯ ----------
+    @dp.callback_query(
+        ExpenseStates.SELECT_PERSON,
+        F.data.startswith("person:"),
+    )
+    async def process_person_selection(callback: CallbackQuery, state: FSMContext):
+        """
+        Обрабатывает выбор пользователя, за которого регистрируем операцию.
+        
+        После выбора сохраняем ID выбранного пользователя в FSM
+        и переходим к обычному сценарию выбора типа операции.
+        """
+        # Извлекаем ID выбранного пользователя из callback_data
+        # Формат: "person:287924307"
+        _, selected_person_id = callback.data.split(":", 1)
+        
+        # Сохраняем ID выбранного пользователя в FSM
+        # Это важно! Далее весь код будет использовать этот ID
+        # вместо ID текущего пользователя
+        await state.update_data(operation_person_id=selected_person_id)
+        
+        # Переходим к обычному меню выбора типа операции
+        await state.set_state(ExpenseStates.MAIN_MENU)
+        
+        # Показываем меню: Затрата / Передача
+        await callback.message.answer(
+            "Выберите тип операции:",
+            reply_markup=_main_operation_keyboard(),
+        )
+        await callback.answer()
+
     # ---------- ШАГ 2. Обработка выбора Затрата / Передача ----------
 
     # >>> ИЗМЕНЕНО: вместо обработки text-сообщений
@@ -357,12 +488,20 @@ def register_expense_handlers(
             # Достаём group_id и список участников группы
             data_state = await state.get_data()
             group_id = data_state.get("group_id")
-            current_user_id = str(callback.from_user.id)
-
-            # Используем тот же способ, что и в ExpenseService.create_expense_for_all:
-            # читаем все строки userGroups и фильтруем по group_id.
-            links, _ = user_groups_svc.user_group_repo._read_all_rows()  # временное решение
+            # Если есть operation_person_id (режим /operation_for) — используем его
+            # Иначе — ID текущего пользователя (обычный режим /operation)
+            operation_person_id = data_state.get("operation_person_id")
+            if operation_person_id:
+                # Режим /operation_for — операция от имени выбранного пользователя
+                person_id = operation_person_id
+            else:
+                # Обычный режим /operation — операция от своего имени
+                person_id = str(callback.from_user.id)
+            
+            # Получаем список всех участников группы
+            links, _ = user_groups_svc.user_group_repo._read_all_rows()
             member_ids: list[str] = []
+            
             if links:
                 for row in links:
                     if not row:
@@ -371,20 +510,20 @@ def register_expense_handlers(
                     row_group_id = row[1].strip().upper() if len(row) > 1 else ""
                     if row_group_id == str(group_id).strip().upper():
                         member_ids.append(row_user_id)
-
+            
             # Переводим FSM в состояние выбора получателя
             await state.set_state(ExpenseStates.TRANSFER_TARGET)
-
+            
             # Показываем inline-клавиатуру со списком участников
+            # ВАЖНО: передаём person_id, а не callback.from_user.id
             await callback.message.answer(
                 "Выберите, кому передаёте деньги:",
                 reply_markup=_transfer_target_keyboard(
                     group_member_ids=member_ids,
-                    current_user_id=current_user_id,
+                    current_user_id=person_id,  # <- ИЗМЕНЕНО: передаём person_id
                     user_groups_svc=user_groups_svc,
                 ),
             )
-
             await callback.answer()
             return
 
@@ -578,8 +717,22 @@ def register_expense_handlers(
         mode = data.get("mode", "expense")
         transfer_target_id = data.get("transfer_target_id")
 
-        user_id = str(message.from_user.id)
-        user_name = message.from_user.full_name  # пригодится, если будем записывать в users
+        # Если в FSM есть operation_person_id — используем его
+        # Иначе — используем ID текущего пользователя (обычный режим)
+        operation_person_id = data.get("operation_person_id")
+        if operation_person_id:
+            # Режим /operation_for — операция за другого пользователя
+            user_id = operation_person_id
+            # Получаем имя выбранного пользователя для логов
+            user_info = user_groups_svc.user_repo.get_by_id(user_id)
+            if user_info and getattr(user_info, "name", None):
+                user_name = user_info.name
+            else:
+                user_name = f"Пользователь {user_id}"
+        else:
+            # Обычный режим /operation — операция от своего имени
+            user_id = str(message.from_user.id)
+            user_name = message.from_user.full_name
 
         # Вызываем бизнес-логику:
         # создаём операцию типа 'expense' или 'transfer' в зависимости от mode.
@@ -621,14 +774,24 @@ def register_expense_handlers(
 
         # ---------- ЛОГИРОВАНИЕ В КАНАЛ ----------  #
         # Формируем человекочитаемый текст операции со всеми атрибутами.
+        # Формируем человекочитаемый текст операции со всеми атрибутами.
         operation_type = "transfer" if mode == "transfer" else "expense"
-
         log_category = category if mode != "transfer" else "transfer"
+
+        # Добавляем информацию о том, кто зарегистрировал операцию
+        # (если это /operation_for)
+        registered_by_info = ""
+        if operation_person_id:
+            # Операция зарегистрирована за другого пользователя
+            registered_by = message.from_user.full_name
+            registered_by_info = f"Зарегистрировал: {registered_by} (id={message.from_user.id})\n"
+
         log_text = (
             "Новая операция зарегистрирована:\n"
             f"Тип: {operation_type}\n"
             f"ID операции: {op_id}\n"
             f"Пользователь: {user_name} (id={user_id})\n"
+            f"{registered_by_info}"  # <- ДОБАВЛЕНО
             f"Группа: {group_id}\n"
             f"Категория: {log_category}\n"
             f"Комментарий: {comment or '—'}\n"

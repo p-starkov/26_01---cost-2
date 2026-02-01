@@ -36,6 +36,7 @@ async def main():
         commands=[
             BotCommand(command="start", description="Начать работу / выбрать группу"),
             BotCommand(command="operation", description="Учесть затрату или передачу"),
+            BotCommand(command="operation_for", description="Учесть операцию за другого"), 
             BotCommand(command="report", description="Показать отчёты"),
             # можно добавить и другие команды
         ]

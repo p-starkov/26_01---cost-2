@@ -21,6 +21,8 @@ from common.id_generator import generate_group_id
 CREATE_GROUP_BTN = "Создать группу"
 JOIN_GROUP_BTN = "Присоединиться к группе"
 
+# ID канала для логирования операций с группами
+LOG_CHANNEL_ID = -1002907150912
 
 class RegistrationStates(StatesGroup):
     """
@@ -137,6 +139,22 @@ def register_registration_handlers(dp: Dispatcher, svc: UserGroupsService) -> No
             # Создаём группу и привязываем к ней пользователя,
             # одновременно регистрируя его в листе users (внутри сервиса)
             group = svc.create_group_and_assign(user_id, group_id, user_name)
+            
+            # ========== БЛОК ЛОГИРОВАНИЯ ==========
+            # Формируем сообщение для лога
+            log_text = (
+                "🆕 Создана новая группа:\n"
+                f"ID группы: {group.id}\n"
+                f"Создатель: {user_name} (id={user_id})\n"
+            )
+            
+            # Отправляем сообщение в канал логирования
+            # message.bot — это экземпляр Bot, через который работает хэндлер
+            await message.bot.send_message(
+                chat_id=LOG_CHANNEL_ID,
+                text=log_text,
+            )
+            # ===============================================
 
             await state.clear()
             await message.answer(
@@ -177,6 +195,9 @@ def register_registration_handlers(dp: Dispatcher, svc: UserGroupsService) -> No
             return
 
         user_name = message.from_user.full_name  # или message.from_user.username
+        
+        # Проверяем, была ли у пользователя старая группа
+        old_group = svc.get_current_user_group(user_id)
 
         joined = svc.join_group(user_id, group_id, user_name)
         if not joined:
@@ -185,6 +206,32 @@ def register_registration_handlers(dp: Dispatcher, svc: UserGroupsService) -> No
                 "Проверьте ID и попробуйте ещё раз.",
             )
             return
+        
+        # ========== ДОБАВИТЬ БЛОК ЛОГИРОВАНИЯ ==========
+        # Формируем сообщение для лога об успешном присоединении
+        # Если была старая группа — это смена, если нет — первое присоединение
+        if old_group is not None:
+            # Пользователь сменил группу
+            log_text = (
+                "🔄 Пользователь сменил группу:\n"
+                f"Старая группа: {old_group.id}\n"
+                f"Новая группа: {group_id}\n"
+                f"Пользователь: {user_name} (id={user_id})\n"
+            )
+        else:
+            # Пользователь впервые присоединился к группе
+            log_text = (
+                "➕ Пользователь присоединился к группе:\n"
+                f"ID группы: {group_id}\n"
+                f"Пользователь: {user_name} (id={user_id})\n"
+            )
+        
+        # Отправляем сообщение в канал логирования
+        await message.bot.send_message(
+            chat_id=LOG_CHANNEL_ID,
+            text=log_text,
+        )
+        # ===============================================
 
         await state.clear()
         await message.answer(

@@ -31,15 +31,16 @@ else
 fi
 
 log "Обновление кода из GitHub (ветка $BRANCH)"
+
 log "Текущая версия до обновления:"
-git rev-parse HEAD
+git log -1 --oneline
 
 git fetch origin
 git reset --hard "origin/$BRANCH"
 git clean -fd
 
 log "Новая версия после обновления:"
-git rev-parse HEAD
+git log -1 --oneline
 log "Код успешно обновлён из GitHub (ветка $BRANCH)"
 
 log "Восстановление $CREDENTIALS_FILE из бэкапа (если есть)"

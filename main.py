@@ -26,7 +26,7 @@ from application.usecases.expenses import ExpenseService
 
 
 async def main():
-    # 1. Создаём Bot и Dispatcher
+    # 1. Создаём Bot и Dispatcher 
     bot = Bot(
         token=TELEGRAM_BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),

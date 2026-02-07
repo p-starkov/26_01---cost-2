@@ -8,41 +8,64 @@ CREDENTIALS_FILE="credentials.json"
 BACKUP_DIR="$PROJECT_DIR/backup"
 BACKUP_FILE="$BACKUP_DIR/credentials.json.bak"
 
-echo "== Остановка сервиса =="
-sudo systemctl stop "$SERVICE_NAME"
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+log "=== РќРђР§РђР›Рћ Р”Р•РџР›РћРЇ ==="
+
+log "РћСЃС‚Р°РЅРѕРІРєР° СЃРµСЂРІРёСЃР°: $SERVICE_NAME"
+sudo systemctl stop "$SERVICE_NAME" || log "Р’РќРРњРђРќРР•: СЃРµСЂРІРёСЃ СѓР¶Рµ РѕСЃС‚Р°РЅРѕРІР»РµРЅ РёР»Рё РЅРµ Р·Р°РїСѓС‰РµРЅ"
 
 cd "$PROJECT_DIR"
 
-echo "== Подготовка каталога для бэкапа =="
+log "РџРѕРґРіРѕС‚РѕРІРєР° РєР°С‚Р°Р»РѕРіР° РґР»СЏ Р±СЌРєР°РїР°: $BACKUP_DIR"
 mkdir -p "$BACKUP_DIR"
 
-echo "== Проверка и бэкап $CREDENTIALS_FILE =="
+log "РџСЂРѕРІРµСЂРєР° Рё Р±СЌРєР°Рї $CREDENTIALS_FILE"
 if [ -f "$CREDENTIALS_FILE" ]; then
   cp "$CREDENTIALS_FILE" "$BACKUP_FILE"
-  echo "Бэкап сохранён в $BACKUP_FILE"
+  log "Р‘СЌРєР°Рї $CREDENTIALS_FILE СЃРѕС…СЂР°РЅС‘РЅ РІ $BACKUP_FILE"
 else
-  echo "ВНИМАНИЕ: $CREDENTIALS_FILE не найден в $PROJECT_DIR"
-  echo "Скрипт продолжит работу, но после обновления файл нужно будет вернуть вручную."
+  log "Р’РќРРњРђРќРР•: $CREDENTIALS_FILE РЅРµ РЅР°Р№РґРµРЅ РІ $PROJECT_DIR, Р±СЌРєР°Рї РЅРµ СЃРѕР·РґР°РЅ"
 fi
 
-echo "== Обновление кода из GitHub =="
+log "РћР±РЅРѕРІР»РµРЅРёРµ РєРѕРґР° РёР· GitHub (РІРµС‚РєР° $BRANCH)"
+log "РўРµРєСѓС‰Р°СЏ РІРµСЂСЃРёСЏ РґРѕ РѕР±РЅРѕРІР»РµРЅРёСЏ:"
+git rev-parse HEAD
+
 git fetch origin
 git reset --hard "origin/$BRANCH"
 git clean -fd
 
-echo "== Восстановление $CREDENTIALS_FILE из бэкапа (если есть) =="
+log "РќРѕРІР°СЏ РІРµСЂСЃРёСЏ РїРѕСЃР»Рµ РѕР±РЅРѕРІР»РµРЅРёСЏ:"
+git rev-parse HEAD
+log "РљРѕРґ СѓСЃРїРµС€РЅРѕ РѕР±РЅРѕРІР»С‘РЅ РёР· GitHub (РІРµС‚РєР° $BRANCH)"
+
+log "Р’РѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРёРµ $CREDENTIALS_FILE РёР· Р±СЌРєР°РїР° (РµСЃР»Рё РµСЃС‚СЊ)"
 if [ -f "$BACKUP_FILE" ]; then
   cp "$BACKUP_FILE" "$CREDENTIALS_FILE"
-  echo "Файл $CREDENTIALS_FILE восстановлен из бэкапа."
+  log "Р¤Р°Р№Р» $CREDENTIALS_FILE СѓСЃРїРµС€РЅРѕ РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅ РёР· $BACKUP_FILE"
 else
-  echo "Бэкап $BACKUP_FILE не найден. Убедись, что $CREDENTIALS_FILE существует перед запуском бота."
+  log "Р’РќРРњРђРќРР•: Р±СЌРєР°Рї $BACKUP_FILE РЅРµ РЅР°Р№РґРµРЅ. РЈР±РµРґРёСЃСЊ, С‡С‚Рѕ $CREDENTIALS_FILE СЃСѓС‰РµСЃС‚РІСѓРµС‚ РїРµСЂРµРґ Р·Р°РїСѓСЃРєРѕРј Р±РѕС‚Р°."
 fi
 
-echo "== Обновление зависимостей =="
+log "РћР±РЅРѕРІР»РµРЅРёРµ Р·Р°РІРёСЃРёРјРѕСЃС‚РµР№ (venv + requirements.txt)"
 source venv/bin/activate
 pip install -r requirements.txt
 deactivate
+log "Р—Р°РІРёСЃРёРјРѕСЃС‚Рё СѓСЃРїРµС€РЅРѕ РѕР±РЅРѕРІР»РµРЅС‹"
 
-echo "== Запуск сервиса =="
+log "Р—Р°РїСѓСЃРє СЃРµСЂРІРёСЃР°: $SERVICE_NAME"
 sudo systemctl start "$SERVICE_NAME"
-sudo systemctl status "$SERVICE_NAME" --no-pager
+
+if systemctl is-active --quiet "$SERVICE_NAME"; then
+  log "РЎРµСЂРІРёСЃ $SERVICE_NAME СѓСЃРїРµС€РЅРѕ Р·Р°РїСѓС‰РµРЅ (status: active)"
+else
+  log "РћРЁРР‘РљРђ: СЃРµСЂРІРёСЃ $SERVICE_NAME РЅРµ Р·Р°РїСѓСЃС‚РёР»СЃСЏ. РЎРјРѕС‚СЂРё Р»РѕРіРё:"
+  systemctl status "$SERVICE_NAME" --no-pager || true
+  log "=== Р”Р•РџР›РћР™ Р—РђР’Р•Р РЁРЃРќ РЎ РћРЁРР‘РљРћР™ ==="
+  exit 1
+fi
+
+log "=== Р”Р•РџР›РћР™ РЈРЎРџР•РЁРќРћ Р—РђР’Р•Р РЁРЃРќ ==="

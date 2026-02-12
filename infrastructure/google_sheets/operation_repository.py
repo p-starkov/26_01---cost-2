@@ -63,6 +63,8 @@ class OperationSheetRepository(IOperationRepository):
         rows = result.get("values", [])
         
         operations: list[Operation] = []
+
+        skipped_date = 0
         
         for i, row in enumerate(rows):  # <- ДОБАВИТЬ enumerate для i
            
